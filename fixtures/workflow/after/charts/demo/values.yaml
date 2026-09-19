@@ -1,0 +1,2 @@
+image: example.invalid/demo:default
+replicas: 2

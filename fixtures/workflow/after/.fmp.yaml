@@ -1,0 +1,6 @@
+paths: [manifests]
+resolve-git: true
+helm: true
+policies:
+  builtin: [image_update]
+  fail-on: [image_update]

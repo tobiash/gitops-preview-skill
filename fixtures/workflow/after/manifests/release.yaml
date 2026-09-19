@@ -1,0 +1,17 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: origin
+  namespace: flux-system
+spec:
+  interval: 1h
+  releaseName: destination
+  targetNamespace: apps
+  chart:
+    spec:
+      chart: charts/demo
+      sourceRef:
+        kind: GitRepository
+        name: charts
+  values:
+    image: example.invalid/demo:2.0.0

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "gitops-preview": {
+      "type": "stdio",
+      "command": "/ABSOLUTE/PATH/TO/fmp",
+      "args": ["mcp", "--root", "/ABSOLUTE/PATH/TO/WORKSPACE"]
+    }
+  }
+}

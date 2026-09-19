@@ -1,0 +1,55 @@
+name: Validate
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      fmp_commit:
+        description: Reviewed full 40-character upstream fmp commit SHA with agent support
+        required: true
+        type: string
+        default: '602b9abdd068838646961f76b0adf435a9ddf71e'
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 scripts/validate.py
+
+  workflow:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require an immutable upstream revision
+        env:
+          FMP_COMMIT: ${{ inputs.fmp_commit }}
+        run: '[[ "$FMP_COMMIT" =~ ^[0-9a-f]{40}$ ]]'
+      - uses: actions/checkout@v4
+        with:
+          repository: tobiash/flux-manifest-preview
+          ref: ${{ inputs.fmp_commit }}
+          path: .fmp-source
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: .fmp-source/go.mod
+          cache-dependency-path: .fmp-source/go.sum
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build without installing into the host
+        working-directory: .fmp-source
+        run: go build -buildvcs=false -o "$RUNNER_TEMP/fmp" ./cmd/fmp
+      - name: Exercise the local fixture
+        env:
+          FMP_BINARY: ${{ runner.temp }}/fmp
+        run: python3 scripts/test-workflow.py

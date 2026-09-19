@@ -1,0 +1,9 @@
+{
+  "requests": [
+    {"operation": "preview", "base": "path:before", "target": "path:after"},
+    {"operation": "query", "id": "@0.id", "query": {"kind": "Deployment", "namespace": "apps", "name": "destination"}},
+    {"operation": "inspect", "id": "@0.id", "resourceId": "@1.items.0.resourceId", "fields": ["/spec/template/spec/containers/0/image", "/spec/replicas"]},
+    {"operation": "check", "id": "@0.id"},
+    {"operation": "check", "id": "@0.afterId", "query": {"kind": "Deployment"}, "requireRequests": true, "requireLimits": true, "maxCPURequests": "1", "maxMemRequests": "512Mi"}
+  ]
+}
