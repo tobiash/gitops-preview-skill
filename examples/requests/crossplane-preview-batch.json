@@ -1,0 +1,11 @@
+{
+  "requests": [
+    {"operation": "preview", "base": "path:before", "target": "path:after"},
+    {"operation": "query", "id": "@0.id", "query": {"cluster": "production", "kind": "XDatabase", "name": "checkout-app-db"}},
+    {"operation": "inspect", "id": "@0.id", "resourceId": "@1.items.0.resourceId", "fields": ["/spec/config/dbInstanceClass", "/spec/config/storage"]},
+    {"operation": "check", "id": "@0.id"},
+    {"operation": "release", "id": "@0.id"},
+    {"operation": "release", "id": "@0.beforeId"},
+    {"operation": "release", "id": "@0.afterId"}
+  ]
+}

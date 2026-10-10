@@ -3,7 +3,7 @@
   "mcp": {
     "gitops-preview": {
       "type": "local",
-      "command": ["/ABSOLUTE/PATH/TO/fmp", "mcp", "--root", "/ABSOLUTE/PATH/TO/WORKSPACE"],
+      "command": ["/ABSOLUTE/PATH/TO/gitops-preview", "mcp", "--root", "/ABSOLUTE/PATH/TO/WORKSPACE"],
       "enabled": true
     }
   }

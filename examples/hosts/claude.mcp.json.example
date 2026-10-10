@@ -2,7 +2,7 @@
   "mcpServers": {
     "gitops-preview": {
       "type": "stdio",
-      "command": "/ABSOLUTE/PATH/TO/fmp",
+      "command": "/ABSOLUTE/PATH/TO/gitops-preview",
       "args": ["mcp", "--root", "/ABSOLUTE/PATH/TO/WORKSPACE"]
     }
   }
