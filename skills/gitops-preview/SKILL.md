@@ -1,6 +1,6 @@
 ---
 name: gitops-preview
-description: Inspects rendered Flux, Helm, and Kustomize changes using fmp snapshots, provenance, and checks. Use when reviewing GitOps changes, editing HelmRelease values, tracing rendered resources, or checking manifest diffs before committing.
+description: Inspects rendered Flux, Helm, Kustomize, and Crossplane changes using GitOps Preview Toolkit snapshots, provenance, and checks. Use when reviewing GitOps changes, editing HelmRelease or XR inputs and Compositions, tracing nested generated resources, or checking manifest diffs before committing.
 ---
 
 # GitOps Preview
@@ -10,7 +10,8 @@ Never edit a retained snapshot or mistake a producer origin for a field mapping.
 
 ## Preconditions
 
-- Require a compatible `fmp` agent API with `schemaVersion: "1"`.
+- Require `gitops-preview` with its sibling plugins and agent `schemaVersion: "1"`.
+  The tested toolkit release is `v0.2.0-rc.1`; `fmp` is a compatibility entrypoint.
 - Prefer the host's `manifest_*` MCP tools; use JSON CLI batches as fallback.
 - Bind to the user-selected workspace root and discover effective render roots.
 - Do not install software, merge host configuration, or enable trust implicitly.
@@ -28,10 +29,14 @@ Never edit a retained snapshot or mistake a producer origin for a field mapping.
 5. Query identities with `manifest_query`; follow every `nextOffset` when the
    claim requires full coverage. A complete operation can return a partial page.
 6. Inspect selected resources with `manifest_inspect`, preferably JSON-pointer
-   `fields`. Compare `old` and `new`; keep `beforeOrigin` and `afterOrigin` distinct.
+    `fields`. Compare `old` and `new`; keep `beforeOrigin` and `afterOrigin` distinct.
+   Unnamed outputs have `logicalId` and an empty name: use returned `resourceId`,
+   not a fabricated Kubernetes name or an unsupported logicalId query filter.
 7. Read the actual producer source. HelmRelease origin uses its original name
    and namespace, which can differ from releaseName and targetNamespace.
-   Trace chart defaults, values, valuesFrom, overlays, and patches as needed.
+    Trace chart defaults, values, valuesFrom, overlays, and patches as needed.
+   For Crossplane, trace parent XRs and Compositions through Flux/Helm layers;
+   edit the producing source, never desired output or inferred live status.
 8. Run `manifest_check` on the diff for configured policies and on a snapshot
    for resource budgets. Read `data.verdict` separately from operational status.
    A failed verdict does not become a pass because the tool returned success.
@@ -44,7 +49,7 @@ Never edit a retained snapshot or mistake a producer origin for a field mapping.
 
 One invocation is one ephemeral session. Never pass a handle from a completed
 CLI process into another. For example, send this JSON on stdin to
-`fmp agent --root /absolute/workspace`:
+`gitops-preview agent --root /absolute/workspace`:
 
 ```json
 {"requests":[
@@ -66,6 +71,9 @@ CLI-only references. General interactive investigation is better over MCP.
   it is not an OS sandbox. Do not promise hermetic execution of arbitrary input.
 - `--trusted` is a deliberate startup capability, not a tool parameter. It
   permits legacy network access and custom Rego, including ambient credentials.
+- Crossplane additionally requires startup `--crossplane`, the pinned external
+  engine, and approved function runtimes. Never grant these from repository YAML
+  or request JSON. Discovery alone does not verify renderer/runtime availability.
 - Core Secret `data` and `stringData` are guaranteed redacted in inspection;
   other credential-key filtering is best effort. Do not request raw secrets.
 - No nested AI, SOPS decryption, apply, or publish operation is available.
@@ -83,3 +91,5 @@ CLI-only references. General interactive investigation is better over MCP.
 
 - [Workflow](references/WORKFLOW.md): source edits and evidence checklist.
 - [Contract](references/CONTRACT.md): operations, limits, and failure handling.
+- [Crossplane](references/CROSSPLANE.md): explicit runtime grants, nested expansion,
+  logical identities, and desired-state limitations.

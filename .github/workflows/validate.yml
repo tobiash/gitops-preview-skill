@@ -5,51 +5,106 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
-      fmp_commit:
-        description: Reviewed full 40-character upstream fmp commit SHA with agent support
+      toolkit_version:
+        description: Reviewed published GitOps Preview Toolkit release tag
         required: true
         type: string
-        default: '602b9abdd068838646961f76b0adf435a9ddf71e'
+        default: 'v0.2.0-rc.1'
 
 permissions:
   contents: read
 
+env:
+  TOOLKIT_VERSION: ${{ inputs.toolkit_version || 'v0.2.0-rc.1' }}
+
 jobs:
   static:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - run: python3 scripts/validate.py
 
   workflow:
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - name: Require an immutable upstream revision
-        env:
-          FMP_COMMIT: ${{ inputs.fmp_commit }}
-        run: '[[ "$FMP_COMMIT" =~ ^[0-9a-f]{40}$ ]]'
-      - uses: actions/checkout@v4
-        with:
-          repository: tobiash/flux-manifest-preview
-          ref: ${{ inputs.fmp_commit }}
-          path: .fmp-source
-          persist-credentials: false
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: .fmp-source/go.mod
-          cache-dependency-path: .fmp-source/go.sum
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Build without installing into the host
-        working-directory: .fmp-source
-        run: go build -buildvcs=false -o "$RUNNER_TEMP/fmp" ./cmd/fmp
-      - name: Exercise the local fixture
+      - name: Download the reviewed published toolkit bundle
+        run: |
+          set -euo pipefail
+          [[ "$TOOLKIT_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]
+          bundle="$RUNNER_TEMP/toolkit"
+          mkdir -p "$bundle"
+          base="https://github.com/tobiash/gitops-preview-toolkit/releases/download/$TOOLKIT_VERSION"
+          archive="gitops-preview-toolkit_${TOOLKIT_VERSION}_linux_amd64.tar.gz"
+          curl -fL --retry 3 "$base/checksums.txt" -o "$bundle/checksums.txt"
+          curl -fL --retry 3 "$base/$archive" -o "$bundle/$archive"
+          (cd "$bundle" && sha256sum --check --ignore-missing checksums.txt)
+          tar -xzf "$bundle/$archive" -C "$bundle"
+          for binary in gitops-preview fmp gitops-preview-flux gitops-preview-crossplane; do
+            test -x "$bundle/$binary"
+          done
+          "$bundle/gitops-preview" agent schema > "$RUNNER_TEMP/schema.json"
+      - name: Exercise the released primary host
         env:
-          FMP_BINARY: ${{ runner.temp }}/fmp
+          GITOPS_PREVIEW_BINARY: ${{ runner.temp }}/toolkit/gitops-preview
         run: python3 scripts/test-workflow.py
+      - name: Exercise the compatibility entrypoint
+        env:
+          FMP_BINARY: ${{ runner.temp }}/toolkit/fmp
+        run: python3 scripts/test-workflow.py
+
+  crossplane:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          repository: tobiash/gitops-preview-toolkit
+          ref: ${{ env.TOOLKIT_VERSION }}
+          path: .toolkit-source
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: .toolkit-source/go.mod
+          cache-dependency-path: .toolkit-source/go.sum
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prepare the published bundle and approved real runtimes
+        run: |
+          set -euo pipefail
+          [[ "$TOOLKIT_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]
+          bundle="$RUNNER_TEMP/toolkit"
+          mkdir -p "$bundle"
+          base="https://github.com/tobiash/gitops-preview-toolkit/releases/download/$TOOLKIT_VERSION"
+          archive="gitops-preview-toolkit_${TOOLKIT_VERSION}_linux_amd64.tar.gz"
+          curl -fL --retry 3 "$base/checksums.txt" -o "$bundle/checksums.txt"
+          curl -fL --retry 3 "$base/$archive" -o "$bundle/$archive"
+          (cd "$bundle" && sha256sum --check --ignore-missing checksums.txt)
+          tar -xzf "$bundle/$archive" -C "$bundle"
+          engine=https://releases.crossplane.io/stable/v2.4.2/bin/linux_amd64/crossplane
+          curl -fL --retry 3 "$engine" -o "$bundle/crossplane-core"
+          curl -fL --retry 3 "$engine.sha256" -o "$bundle/core.sha256"
+          printf '%s  %s\n' "$(tr -d '[:space:]' < "$bundle/core.sha256")" "$bundle/crossplane-core" | sha256sum --check
+          chmod +x "$bundle/crossplane-core"
+          GOBIN="$bundle" go install github.com/crossplane-contrib/function-go-templating@v0.12.0
+      - name: Test real nested Crossplane agent workflows
+        env:
+          GITOPS_PREVIEW_BINARY: ${{ runner.temp }}/toolkit/gitops-preview
+          CROSSPLANE_ENGINE: ${{ runner.temp }}/toolkit/crossplane-core
+          CROSSPLANE_FUNCTION_TARGET: 127.0.0.1:19443
+          TOOLKIT_EXAMPLE_ROOT: ${{ github.workspace }}/.toolkit-source/docs/examples/nested-crossplane-flux
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/toolkit/function-go-templating" --insecure --address="$CROSSPLANE_FUNCTION_TARGET" > "$RUNNER_TEMP/function.log" 2>&1 &
+          function_pid=$!
+          trap 'kill "$function_pid" 2>/dev/null || true; wait "$function_pid" 2>/dev/null || true' EXIT
+          python3 scripts/test-crossplane.py

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise an explicitly supplied fmp binary against a temporary local fixture."""
+"""Exercise an explicitly supplied toolkit bundle against a temporary local fixture."""
 
 import json
 import os
@@ -27,10 +27,10 @@ def success(response):
 
 
 def main():
-    supplied = os.environ.get("FMP_BINARY")
-    require(supplied, "set FMP_BINARY to an existing compatible fmp executable; no automatic install")
+    supplied = os.environ.get("GITOPS_PREVIEW_BINARY") or os.environ.get("FMP_BINARY")
+    require(supplied, "set GITOPS_PREVIEW_BINARY to an existing compatible executable; no automatic install")
     binary = shutil.which(supplied)
-    require(binary, f"FMP_BINARY is not executable: {supplied}")
+    require(binary, f"supplied toolkit executable is not available: {supplied}")
     binary = str(Path(binary).resolve())
 
     with tempfile.TemporaryDirectory(prefix="gitops-preview-test-") as temporary:

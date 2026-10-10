@@ -1,80 +1,92 @@
 # Deliberate Installation
 
-These instructions do not install or overwrite anything automatically. Review
-the source and choose the workspace before running commands. Skill version
-v0.1.0 is a prerelease; agent API compatibility is schemaVersion `"1"`.
+Review source, choose the workspace, and approve installations explicitly.
+The tested toolkit is **v0.2.0-rc.1**, a published prerelease. Agent compatibility
+is `schemaVersion: "1"`; the skill's own version is separate.
 
-## Binary Prerequisite
+## Install A Complete Toolkit Bundle
 
-This skill release is tested against the immutable fmp commit
-`602b9abdd068838646961f76b0adf435a9ddf71e`, containing agent and MCP support.
-Do not use `@latest`: released binaries may not contain this feature.
+Canonical repository: https://github.com/tobiash/gitops-preview-toolkit
+Published RC: https://github.com/tobiash/gitops-preview-toolkit/releases/tag/v0.2.0-rc.1
+
+Prefer a reviewed `gitops-preview-toolkit_v0.2.0-rc.1_<os>_<arch>.tar.gz` release
+archive. Verify its SHA-256 using the release's `checksums.txt`, then extract the
+whole archive to a directory on PATH. It contains `gitops-preview`, `fmp`,
+`gitops-preview-flux`, and `gitops-preview-crossplane`. The host resolves sibling
+plugins first, then PATH. Installing the core alone is not sufficient to render.
+
+With Go **1.26.8 or later**, an explicitly approved alternative is:
 
 ```sh
-FMP_COMMIT='602b9abdd068838646961f76b0adf435a9ddf71e'
-go install "github.com/tobiash/flux-manifest-preview/cmd/fmp@${FMP_COMMIT}"
-fmp agent schema
+go install github.com/tobiash/gitops-preview-toolkit/cmd/gitops-preview@v0.2.0-rc.1
+go install github.com/tobiash/gitops-preview-toolkit/cmd/gitops-preview-flux@v0.2.0-rc.1
+go install github.com/tobiash/gitops-preview-toolkit/cmd/gitops-preview-crossplane@v0.2.0-rc.1
+# Optional compatibility entrypoint:
+go install github.com/tobiash/gitops-preview-toolkit/cmd/fmp@v0.2.0-rc.1
+gitops-preview agent schema
 ```
 
-Use Go 1.26.3 or later, as required by that revision. Alternatively build a reviewed
-checkout manually and use its absolute binary path. Neither test script installs
-software or changes host configuration. An old binary that reports unknown
-command `agent` is incompatible, not a reason to fall back to legacy commands.
+Do not substitute `@latest` for this tested prerelease. Older stable tags may
+declare the former module path or lack the agent API. Published archives embed
+the release version; Go-installed commands can display `dev` because the linker
+version flag is absent. Inspect Go build metadata and the agent schema instead
+of inferring incompatibility from that display alone.
+
+An old binary without `agent` is incompatible. Missing sibling plugins are an
+installation problem, not a reason to fall back to incomplete legacy rendering.
+Crossplane also needs the separately installed controller engine **v2.4.2** and
+approved function runtimes; neither is provided by installing the host.
 
 ## Skill Discovery
 
-Clone the repository into a location you manage outside
-the GitOps workspace to be captured:
+Clone outside the GitOps workspace that the service will capture:
 
 ```sh
 git clone https://github.com/tobiash/gitops-preview-skill.git
 ```
 
-Optionally select a reviewed published tag or commit. For user-level discovery,
-create the skills parent if needed and link the skill using the actual clone path:
+Select a reviewed skill tag or commit. For user-level discovery, both hosts
+support `~/.claude/skills/gitops-preview`:
 
 ```sh
 mkdir -p "$HOME/.claude/skills"
 ln -s /absolute/path/to/gitops-preview-skill/skills/gitops-preview "$HOME/.claude/skills/gitops-preview"
 ```
 
-Do not replace an existing skill directory silently. Both hosts support the
-user-level location. Keep it outside the selected `fmp --root`: source capture
-rejects all symlink entries, including project-local skill links. Do not bind
-the service to your entire home directory.
+Do not replace an existing skill directory silently. Keep the link outside the
+selected `--root`: source capture rejects symlink entries inside the workspace.
+Do not bind the server to the entire home directory.
 
-For project-scoped discovery, Windows, or where symlinks are unsuitable,
-deliberately copy the entire `skills/gitops-preview` directory (including
-references and the bundled `LICENSE`) into the project's
-`.claude/skills/gitops-preview` instead. Both
-hosts support this project location; external-skill discovery must not be
-disabled in OpenCode. Keep copied versions under deliberate update control.
+For project discovery or where symlinks are unsuitable, deliberately copy the
+whole skill directory, including references and LICENSE, into the project's
+`.claude/skills/gitops-preview`. OpenCode must have external-skill discovery
+enabled. Copied versions need deliberate updates.
 
 ## Host MCP Templates
 
-The repository's `examples/hosts/opencode.json.example` and
-`examples/hosts/claude.mcp.json.example` are **inactive examples**. They contain
-no secrets, trusted flag, or automatic permission grants. Replace executable
-and workspace placeholders with absolute paths. Manually merge the relevant
-server entry into existing configuration; never overwrite unrelated settings.
+`examples/hosts/opencode.json.example` and `claude.mcp.json.example` are inactive
+file templates for the default local profile. Replace executable and workspace
+placeholders; manually merge the server entry without overwriting unrelated
+configuration or granting automatic tool permissions. Point to the host
+`gitops-preview`, not either gRPC render-plugin executable.
 
-For OpenCode use `opencode.json` or `opencode.jsonc`. Local MCP configuration
-uses `mcp.<name>.type: "local"` and a command array containing executable and
-arguments. Quit and restart OpenCode after deliberately changing configuration
-or skill files; the current session retains its loaded configuration.
+The optional `opencode.crossplane.json.example` contains explicit trust and
+Crossplane startup grants and is **disabled by default**. Review the engine,
+Function packages, Docker access, and workspace before enabling it. Existing
+local templates must not be silently upgraded to trusted profiles.
 
-For Claude Code use project `.mcp.json`, with `mcpServers.<name>`, `type:
-"stdio"`, a command string, and an args array. Start a new session, review the
-project server approval prompt, and inspect `/mcp` status. Do not bypass approval.
+OpenCode local MCP uses `mcp.<name>.type: "local"`, a command array, and an
+`enabled` flag in `opencode.json`/`opencode.jsonc`. Restart after deliberate
+configuration or skill changes. Claude Code project `.mcp.json` uses
+`mcpServers.<name>`, `type: "stdio"`, command and args. Start a new session,
+review the approval prompt and inspect `/mcp` status; do not bypass approval.
 
-On either host, verify `manifest_discover` reports the selected root's expected
-configuration, profile `local`, and schemaVersions containing `"1"` before
-rendering. Tool display names may be prefixed by the host/server name.
-Do not add `--trusted` to resolve missing remote dependencies without a separate
-trust decision: it enables legacy network and custom Rego capabilities with
-access to ambient credentials. Local restriction is not an OS sandbox.
+Verify `manifest_discover` reports expected roots, profile and schemaVersions
+containing `"1"`. A complete discovery is not a renderer/runtime probe. Require
+a complete actual render before trusting snapshot facts. Tool names can carry
+host/server prefixes. Do not grant `--trusted` to work around a failure.
 
-Official configuration references:
+Official host references:
 
 - https://opencode.ai/docs/mcp-servers/
 - https://opencode.ai/docs/skills/
@@ -83,10 +95,22 @@ Official configuration references:
 
 ## Smoke Tests
 
-From the skill repository, run `python3 scripts/validate.py` and
-`FMP_BINARY=/absolute/path/to/fmp python3 scripts/test-workflow.py`.
-The latter needs no Git initialization, network chart access, cluster, or model.
-MCP SDK protocol tests are upstream. An isolated OpenCode instance successfully
-connected to the pinned stdio server. Live OpenCode/Claude model tests have not
-been performed, and Claude Code was unavailable for a connection smoke test.
-Successful CLI tests alone do not certify host integration.
+From this skill repository:
+
+```sh
+python3 scripts/validate.py
+GITOPS_PREVIEW_BINARY=/approved/bundle/gitops-preview python3 scripts/test-workflow.py
+# Verify the retained compatibility entrypoint too:
+FMP_BINARY=/approved/bundle/fmp python3 scripts/test-workflow.py
+```
+
+The local tests need no network chart access, cluster, model, or Git initialization.
+They never install tools, edit host configuration, or change the checked-in
+fixture. Crossplane tests additionally require explicit runtime and example
+paths, as documented in the repository README. CI downloads a checksum-verified
+published toolkit bundle into its isolated runner and grants function execution
+only in the dedicated Crossplane job.
+
+CLI contract tests do not certify a live model session. The older skill revision
+connected to OpenCode's stdio host; live model sessions and Claude Code approval
+flows are not validated by these tests. Upstream tests cover the MCP SDK transport.

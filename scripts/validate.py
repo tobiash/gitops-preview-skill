@@ -43,7 +43,7 @@ def main():
     require(re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name), "invalid skill name syntax")
     description = metadata["description"]
     require(0 < len(description) <= 1024 and "Use when " in description, "invalid description")
-    expected = {"WORKFLOW.md", "CONTRACT.md", "INSTALL.md"}
+    expected = {"WORKFLOW.md", "CONTRACT.md", "INSTALL.md", "CROSSPLANE.md"}
     references = skill.parent / "references"
     require({p.name for p in references.iterdir()} == expected, "unexpected reference layout")
     for name in expected:
@@ -85,15 +85,23 @@ def main():
     require(set(opencode) == {"$schema", "mcp"}, "unexpected OpenCode config/permissions")
     require(opencode["$schema"] == "https://opencode.ai/config.json", "wrong OpenCode schema")
     server = opencode["mcp"]["gitops-preview"]
-    command = ["/ABSOLUTE/PATH/TO/fmp", "mcp", "--root", "/ABSOLUTE/PATH/TO/WORKSPACE"]
+    command = ["/ABSOLUTE/PATH/TO/gitops-preview", "mcp", "--root", "/ABSOLUTE/PATH/TO/WORKSPACE"]
     require(server == {"type": "local", "command": command, "enabled": True}, "unsafe OpenCode template")
     claude = json.loads((hosts / "claude.mcp.json.example").read_text())
     require(claude == {"mcpServers": {"gitops-preview": {
         "type": "stdio", "command": command[0], "args": command[1:],
     }}}, "unsafe Claude template")
+    crossplane = json.loads((hosts / "opencode.crossplane.json.example").read_text())
+    require(crossplane == {"$schema": opencode["$schema"], "mcp": {
+        "gitops-preview-crossplane": {
+            "type": "local", "enabled": False,
+            "command": command + ["--trusted", "--crossplane", "--crossplane-engine",
+                                  "/APPROVED/PATH/TO/crossplane-core"],
+        },
+    }}, "Crossplane template must remain disabled with explicit startup grants")
     for active in ("opencode.json", "opencode.jsonc", ".mcp.json", ".opencode", ".claude"):
         require(not (ROOT / active).exists(), f"unexpected active host configuration: {active}")
-    for script in ("validate.py", "test-workflow.py"):
+    for script in ("validate.py", "test-workflow.py", "test-crossplane.py"):
         path = ROOT / "scripts" / script
         require(path.read_text().startswith("#!/usr/bin/env python3\n"), "missing script shebang")
         require(path.stat().st_mode & 0o111, f"script is not executable: {script}")

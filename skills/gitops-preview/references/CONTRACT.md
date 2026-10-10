@@ -1,22 +1,30 @@
 # Agent Contract
 
-Compatibility: `schemaVersion` is the string `"1"`. Verify with `fmp agent schema`
-and `discover`; no released MCP version is implied by this skill's version.
+Compatibility: `schemaVersion` is the string `"1"`. This update is tested against
+GitOps Preview Toolkit `v0.2.0-rc.1`. Verify with `gitops-preview agent schema`
+and `discover`; toolkit and skill versions are distinct. `fmp` remains compatible.
 
 ## Transports
 
-`fmp mcp --root /absolute/workspace` serves stdio MCP tools:
+`gitops-preview mcp --root /absolute/workspace` serves stdio MCP tools:
 `manifest_discover`, `manifest_render`, `manifest_preview`, `manifest_query`,
 `manifest_inspect`, `manifest_compare`, `manifest_check`, `manifest_release`.
 MCP inputs omit `operation`. Structured results carry the common envelope;
 operational failure also sets MCP `isError`. Successful failed-policy verdicts
 do not set `isError`.
 
-`fmp agent --root /absolute/workspace` reads one JSON request or one
+`gitops-preview agent --root /absolute/workspace` reads one JSON request or one
 `{"requests":[...]}` batch from stdin. Single requests include `operation`;
-alternatively `fmp agent render` selects it, and any body operation must agree.
+alternatively `gitops-preview agent render` selects it, and any body operation must agree.
 Batches cannot use an operation argument. Unknown input fields are rejected.
-`fmp agent schema` does not require `--root`.
+`gitops-preview agent schema` does not require `--root`.
+
+The host needs `gitops-preview-flux` beside it or on PATH. Crossplane additionally
+needs `gitops-preview-crossplane`, the external controller engine v2.4.2, and
+approved function runtimes. These processes communicate over local gRPC, not
+MCP. MCP uses the host's stdio interface; never configure a render plugin as an
+MCP server. Plugin processes persist within the service, with fresh isolated
+evaluation sessions and immutable retained handles.
 
 Schemas describe concrete per-operation input/output DTOs, not an unconstrained
 data object. CLI request unions discriminate by operation; response unions
@@ -55,7 +63,8 @@ Symlink source entries are rejected. Capture excludes `.git`, `node_modules`,
 `vendor`, `.venv`, `venv`, `.terraform`, and `.cache`, and reports skipped entries.
 
 `paths` overrides configured render roots; paths are relative to the captured
-source root, optionally `cluster:path`. For `path:before`, `.fmp.yaml` and roots
+source root, optionally `cluster:path`. For `path:before`, `.gitops-preview.yaml`
+(or a legacy `.fmp.yaml` fallback) and roots
 come from `before/`. Preview uses the base configuration and captured base
 policies for both sides; compare uses the before snapshot's policies.
 
@@ -64,6 +73,11 @@ Query fields combine with AND: `cluster`, `kind`, `name`, `namespace`, `group`,
 `added`, `modified`, or `deleted`. Producer is the exact returned producer text.
 Query metadata contains opaque resourceId, cluster, apiVersion, kind, name,
 namespace, action, producer, beforeOrigin, and afterOrigin as applicable.
+Unnamed composed outputs additionally have `logicalId` and an empty `name`.
+Logical identity matches a parent XR's composition output slot; it is not an
+API-server name. `logicalId` is output metadata, not an accepted query filter.
+Query by supported kind/cluster/producer fields, then inspect the returned
+`resourceId`. Multiple unnamed resources of the same kind remain distinct.
 Use IDs only with their owning handle. Origins identify producers, not complete
 editable field-to-source mappings. A snapshot ordinarily has only afterOrigin.
 
@@ -117,6 +131,12 @@ custom Rego modules. This is capability restriction, not an OS sandbox.
 Explicit startup `--trusted` permits legacy network access and custom Rego;
 ambient credentials and process capabilities are in that broad trust boundary.
 Repository settings and individual tool calls cannot grant startup trust.
+Crossplane is unavailable in local-only sessions. Trusted sessions still require
+explicit startup `--crossplane`; `--trusted` alone does not enable it. The engine
+path, plugin overrides, and `--crossplane-function name=host:port` grants come
+from trusted startup, never render requests or resource annotations. The current
+discover response does not expose a Crossplane-enabled flag or validate function
+connections: confirm the startup configuration and a complete actual render.
 Repository credential/cache paths are ignored in favor of startup defaults.
 When the effective render configuration requires SOPS (`sops-decrypt: true`),
 render/preview fails with `PermissionDenied`, even with `--trusted`. Discovery
@@ -128,7 +148,7 @@ Both local and trusted agent profiles always enable `WithStrictInputs` and rejec
 the known unsupported Flux Kustomization spec inputs:
 `postBuild.substituteFrom` (including optional references), `patches`, `images`,
 `components`, `namePrefix`, `nameSuffix`, `commonMetadata`, and `decryption`.
-It also rejects HelmRelease `spec.chart.spec.valuesFiles` and
+It also rejects HelmRelease `spec.chart.spec.valuesFiles`, `spec.chartRef`, and
 `ignoreMissingValuesFiles` when used. These are rendering failures, not complete
 snapshots with silently ignored input. This restriction concerns Flux resource
 fields, not a blanket rejection of native Kustomize overlay files. Additional
